@@ -207,10 +207,12 @@ static int simplefs_readdir(struct file *filp, void *dirent, filldir_t filldir)
 	record = (struct simplefs_dir_record *)bh->b_data;
 	for (i = 0; i < sfs_inode->dir_children_count; i++) {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 11, 0)
+		if(record->inode_no != 0)
 		dir_emit(ctx, record->filename, SIMPLEFS_FILENAME_MAXLEN,
 			record->inode_no, DT_UNKNOWN);
 		ctx->pos += sizeof(struct simplefs_dir_record);
 #else
+		if(record->inode_no != 0)
 		filldir(dirent, record->filename, SIMPLEFS_FILENAME_MAXLEN, pos,
 			record->inode_no, DT_UNKNOWN);
 		filp->f_pos += sizeof(struct simplefs_dir_record);
@@ -441,10 +443,37 @@ static int simplefs_create(struct inode *dir, struct dentry *dentry,
 static int simplefs_mkdir(struct inode *dir, struct dentry *dentry,
 			  umode_t mode);
 
+
+static int simplefs_unlink(struct inode * dir, struct dentry *dentry)
+{
+	int i,ret;
+	struct simplefs_inode *parent_dir_inode;
+	struct super_block *sb;
+	struct simplefs_dir_record *dir_contents_record;
+	struct buffer_head *bh;
+	sb = dir->i_sb;
+	parent_dir_inode = SIMPLEFS_INODE(dir);
+	bh = sb_bread(sb, parent_dir_inode->data_block_number);
+	BUG_ON(!bh);
+	dir_contents_record = (struct simplefs_dir_record *)bh->b_data;
+	for(i = 0;i < parent_dir_inode->dir_children_count;i++,dir_contents_record++){
+		if(dir_contents_record->inode_no == dentry->d_inode->i_ino){
+			dir_contents_record->inode_no = 0;
+			dput(dentry);
+			break;
+		}
+	}
+	mark_buffer_dirty(bh);
+	sync_dirty_buffer(bh);
+	brelse(bh);
+	return 0;
+}
+
 static struct inode_operations simplefs_inode_ops = {
 	.create = simplefs_create,
 	.lookup = simplefs_lookup,
 	.mkdir = simplefs_mkdir,
+    .unlink= simplefs_unlink,
 };
 
 static int simplefs_create_fs_object(struct inode *dir, struct dentry *dentry,
@@ -599,7 +628,7 @@ struct dentry *simplefs_lookup(struct inode *parent_inode,
 
 	record = (struct simplefs_dir_record *)bh->b_data;
 	for (i = 0; i < parent->dir_children_count; i++) {
-		if (!strcmp(record->filename, child_dentry->d_name.name)) {
+		if (!strcmp(record->filename, child_dentry->d_name.name) && record->inode_no != 0) {
 			/* FIXME: There is a corner case where if an allocated inode,
 			 * is not written to the inode store, but the inodes_count is
 			 * incremented. Then if the random string on the disk matches
