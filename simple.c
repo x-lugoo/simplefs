@@ -451,6 +451,7 @@ static int simplefs_unlink(struct inode * dir, struct dentry *dentry)
 	struct super_block *sb;
 	struct simplefs_dir_record *dir_contents_record;
 	struct buffer_head *bh;
+	
 	sb = dir->i_sb;
 	parent_dir_inode = SIMPLEFS_INODE(dir);
 	bh = sb_bread(sb, parent_dir_inode->data_block_number);
