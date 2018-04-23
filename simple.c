@@ -617,17 +617,8 @@ static int simplefs_create_fs_object(struct inode *dir, struct dentry *dentry,
 				break;
 			}
 		}
-		if(!samedir){
-			dir_contents_datablock += parent_dir_inode->dir_children_count;
-			dir_contents_datablock->inode_no = inode->i_ino;
-			strcpy(dir_contents_datablock->filename, dentry->d_name.name);
-		}
-		printk(KERN_INFO "samedir = %d get new inode block num=%d %s(%d)\n",
-			samedir,dead_inode.data_block_number,__func__,__LINE__);
-		
 		sfs_inode->data_block_number = dead_inode.data_block_number;
 		sfs_inode->inode_no = inode->i_ino;
-		simplefs_inode_add(sb, sfs_inode,exist);
 	}
 	/* First get a free block and update the free map,
 	 * Then add inode to the inode store and update the sb inodes_count,
@@ -643,13 +634,15 @@ static int simplefs_create_fs_object(struct inode *dir, struct dentry *dentry,
 			mutex_unlock(&simplefs_directory_children_update_lock);
 			return ret;
 		}
-
-		simplefs_inode_add(sb, sfs_inode,exist);
+	 }
+	  simplefs_inode_add(sb, sfs_inode,exist);
+	  if(!exist || (exist && !samedir)){
 		/* Navigate to the last record in the directory contents */
 		dir_contents_datablock += parent_dir_inode->dir_children_count;
 		dir_contents_datablock->inode_no = sfs_inode->inode_no;
 		strcpy(dir_contents_datablock->filename, dentry->d_name.name);
-	 }
+	  }
+	 
 	mark_buffer_dirty(bh);
 	sync_dirty_buffer(bh);
 	brelse(bh);
@@ -659,7 +652,7 @@ static int simplefs_create_fs_object(struct inode *dir, struct dentry *dentry,
 		sfs_trace("Failed to acquire mutex lock\n");
 		return -EINTR;
 	}
-	if(!exist){
+	if(!exist || (exist && !samedir)){
 		parent_dir_inode->dir_children_count++;
 		ret = simplefs_inode_save(sb, parent_dir_inode);
 		if (ret) {
