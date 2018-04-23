@@ -46,6 +46,7 @@ struct simplefs_dir_record {
 struct simplefs_inode {
 	mode_t mode;
 	uint64_t inode_no;
+	uint64_t dead_inode_no;  /*save the inode no that was deleted last time*/
 	uint64_t data_block_number;
 
 	union {
